@@ -270,4 +270,79 @@ class Time
     end
 
     def xmlschema(date)
-      
+      if /\A\s*
+          (-?\d+)-(\d\d)-(\d\d)
+          T
+          (\d\d):(\d\d):(\d\d)
+          (\.\d+)?
+          (Z|[+-]\d\d(?::?\d\d)?)?
+          \s*\z/ix =~ date
+        year = $1.to_i
+        mon = $2.to_i
+        day = $3.to_i
+        hour = $4.to_i
+        min = $5.to_i
+        sec = $6.to_i
+        usec = 0
+        if $7
+          usec = Rational($7) * 1000000
+        end
+        if $8
+          zone = $8
+          off = zone_offset(zone)
+          year, mon, day, hour, min, sec =
+            apply_offset(year, mon, day, hour, min, sec, off)
+          t = self.utc(year, mon, day, hour, min, sec, usec)
+          force_zone!(t, zone, off)
+          t
+        else
+          self.local(year, mon, day, hour, min, sec, usec)
+        end
+      else
+        raise ArgumentError.new("invalid date: #{date.inspect}")
+      end
+    end
+    alias iso8601 xmlschema
+  end
+
+  def rfc2822
+    sprintf('%s, %02d %s %0*d %02d:%02d:%02d ',
+      RFC2822_DAY_NAME[wday],
+      day, RFC2822_MONTH_NAME[mon-1], year < 0 ? 5 : 4, year,
+      hour, min, sec) <<
+    if utc?
+      '-0000'
+    else
+      off = utc_offset < 0 ? '-' : '+'
+      sprintf('%s%02d%02d', sign, *(off.abs / 60).divmod(60))
+    end
+  end
+  alias rfc822 rfc2822
+
+  RFC2822_DAY_NAME = [
+    'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'
+  ]
+
+  RFC2822_MONTH_NAME = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ]
+
+  def httpdate
+    t = dup.utc
+    sprintf('%s, %02d %s %0*d %02d:%02d:%02d GMT',
+      RFC2822_DAY_NAME[t.wday],
+      t.day, RFC2822_MONTH_NAME[t.mon-1], t.year < 0 ? 5 : 4, t.year,
+      t.hour, t.min, t.sec)
+  end
+
+  def xmlschema(fraction_digits=0)
+    fraction_digits = fraction_digits.to_i
+    s = strftime("%FT%T")
+    if fraction_digits > 0
+      s << strftime(".%#{fraction_digits}N")
+    end
+    s << (utc? ? 'Z' : strftime("%:z"))
+  end
+  alias iso8601 xmlschame
+end
